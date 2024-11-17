@@ -1,0 +1,114 @@
+version: "3.7"
+
+services:
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Mount the init.sql script
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - airflow_network
+
+  airflow-webserver:
+    image: apache/airflow:2.6.0
+    container_name: airflow_webserver
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow  # Connection string for Airflow's metadata DB
+      AIRFLOW__WEBSERVER__RBAC: "True"  # Enable RBAC for Airflow Web UI
+      AIRFLOW_CONN_POSTGRES_DEFAULT: "postgres://airflow:airflow@postgres:5432/airflow"  # Set the default PostgreSQL connection
+    depends_on:
+      - postgres
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+    ports:
+      - "8082:8080"
+    networks:
+      - airflow_network
+    command: ["airflow", "webserver"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
+
+  airflow-scheduler:
+    image: apache/airflow:2.6.0
+    container_name: airflow_scheduler
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow  # Connection string for Airflow's metadata DB
+      AIRFLOW_CONN_POSTGRES_DEFAULT: "postgres://airflow:airflow@postgres:5432/airflow"  # Set the default PostgreSQL connection
+    depends_on:
+      - postgres
+      - airflow-webserver
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+    networks:
+      - airflow_network
+    command: ["airflow", "scheduler"]
+    healthcheck:
+      test: ["CMD", "pgrep", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
+
+  airflow-init:
+    image: apache/airflow:2.6.0
+    container_name: airflow_init
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow  # Connection string for Airflow's metadata DB
+    depends_on:
+      - postgres
+    command: ["sh", "-c", "airflow db init && airflow users create --username admin --password admin --firstname Firstname --lastname Lastname --role Admin --email admin@example.com && exit", "init"]  # Initialize the database and create admin user
+    networks:
+      - airflow_network
+    entrypoint: ["sh", "-c", "airflow db init && airflow users create --username admin --password admin --firstname Firstname --lastname Lastname --role Admin --email admin@example.com && exit"]  # Initialize DB, create admin user, and exit
+
+  trigger_dag:
+    image: apache/airflow:2.6.0
+    container_name: trigger_dag
+    depends_on:
+      - airflow-webserver
+      - airflow-scheduler
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow  # Connection string for Airflow's metadata DB
+    networks:
+      - airflow_network
+    entrypoint: ["/bin/bash", "/wait-for-airflow.sh"]
+    volumes:
+      - ./scripts/wait-for-airflow.sh:/wait-for-airflow.sh
+    command: ["airflow", "dags", "trigger", "pull_scf_data_dag"]
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@pgadmin.org  # Set default pgAdmin login email
+      PGADMIN_DEFAULT_PASSWORD: admin  # Set default pgAdmin login password
+    ports:
+      - "5050:80"  # Map pgAdmin web UI to port 5050 on your machine
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin  # Persist pgAdmin data
+      - ./pgadmin/init_pgadmin.sh:/docker-entrypoint-initdb.d/init_pgadmin.sh  # Mount the pgAdmin connection script
+    networks:
+      - airflow_network
+    depends_on:
+      - postgres
+
+networks:
+  airflow_network:
+    driver: bridge
+
+volumes:
+  pgadmin_data:
+  postgres_data:
