@@ -67,6 +67,34 @@ Once the containers are running, you can trigger DAGs manually or through the Ai
 
 If you want to trigger a specific DAG automatically, the `trigger_dag` container can be configured to do so by editing the `entrypoint` and specifying the desired DAG name.
 
+### 5. Access pgAdmin
+Once the containers are up and running, you can access the pgAdmin web interface:
+
+Open your browser and navigate to http://localhost:8080.
+Log in using the credentials you defined in the docker-compose.yml under PGADMIN_DEFAULT_EMAIL and PGADMIN_DEFAULT_PASSWORD. For example:
+Email: admin@example.com
+Password: admin
+
+### 6. Connect pgAdmin to PostgreSQL
+Once logged in to pgAdmin:
+
+Click on Add New Server in the pgAdmin dashboard.
+
+In the General tab:
+
+Name: You can give the server connection any name (e.g., Airflow Postgres).
+
+In the Connection tab:
+
+Host name/address: Enter postgres (this is the name of your PostgreSQL service in the Docker Compose configuration).
+Port: Enter 5432 (the internal port of the PostgreSQL container).
+Maintenance database: Enter airflow (the database defined in the docker-compose.yml).
+Username: Enter airflow (the PostgreSQL user defined in the docker-compose.yml).
+Password: Enter airflow (the password defined in the docker-compose.yml).
+Click Save to connect to the PostgreSQL database.
+
+
+
 ## Volumes
 
 - **`postgres_data`**: Persists PostgreSQL data.
