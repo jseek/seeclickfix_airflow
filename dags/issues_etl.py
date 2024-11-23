@@ -55,7 +55,7 @@ def pull_scf_data(**kwargs):
             'page': page,
             'per_page': per_page,
             'details': True,
-            'place_url': 'tacoma'
+            'place_url': 'scranton'
         }
 
     while True:
