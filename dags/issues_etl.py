@@ -23,10 +23,8 @@ def pull_scf_data(**kwargs):
     # Initialize the session and pagination parameters
     page = 1
     per_page = 10
-    all_issues = []
 
     params = {
-        # 'after': '2024-01-01T00:00:00Z',
         'page': page,
         'per_page': per_page,
         'sort_direction': 'ASC',
@@ -73,8 +71,32 @@ def pull_scf_data(**kwargs):
 
         data = response.json()
         issues = data['issues']
-        all_issues.extend(issues)  # Append the issues to the all_issues list
 
+        # Store the issues in the database immediately
+        rows = [(issue['id'], json.dumps(issue), issue['updated_at']) for issue in issues]
+        pg_hook = PostgresHook(postgres_conn_id='postgres_default')
+        conn = pg_hook.get_conn()
+        cur = conn.cursor()
+
+        insert_query = f"""
+            INSERT INTO {TABLE_NAME} (id, obj, updated_at)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (id) DO UPDATE 
+            SET obj = EXCLUDED.obj, updated_at = EXCLUDED.updated_at;
+        """
+        
+        try:
+            logging.info(f"Inserting {len(rows)} issues into the database.")
+            cur.executemany(insert_query, rows)
+            conn.commit()
+        except Exception as e:
+            logging.error(f"Error inserting rows: {e}")
+            conn.rollback()
+        finally:
+            cur.close()
+            conn.close()
+
+        # Check for pagination
         pagination = data['metadata']['pagination']
         next_page = pagination.get('next_page')
 
@@ -88,45 +110,6 @@ def pull_scf_data(**kwargs):
 
         # Add a small delay between requests to avoid hitting rate limits
         time.sleep(2)  # Adjust this sleep time as needed (e.g., 2 seconds)
-
-    # Store the issues in the XCom system for downstream tasks
-    kwargs['ti'].xcom_push(key='scf_issues', value=all_issues)
-    logging.info(f"Collected {len(all_issues)} issues.")
-
-
-# Function to process issues and store them in PostgreSQL
-def process_and_store_issues(**kwargs):
-    issues = kwargs['ti'].xcom_pull(task_ids='pull_scf_data', key='scf_issues')
-    if not issues:
-        logging.info("No issues to process.")
-        return
-
-    rows = [(issue['id'], json.dumps(issue), issue['updated_at']) for issue in issues]
-
-    pg_hook = PostgresHook(postgres_conn_id='postgres_default')
-    conn = pg_hook.get_conn()
-    cur = conn.cursor()
-
-    insert_query = f"""
-        INSERT INTO {TABLE_NAME} (id, obj, updated_at)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (id) DO UPDATE 
-        SET obj = EXCLUDED.obj, updated_at = EXCLUDED.updated_at;
-    """
-    
-    logging.info(f"Inserting {len(rows)} issues into the database.")
-    
-    try:
-        # Using executemany to insert multiple rows at once
-        cur.executemany(insert_query, rows)
-        conn.commit()
-    except Exception as e:
-        logging.error(f"Error inserting rows: {e}")
-        conn.rollback()
-    finally:
-        cur.close()
-        conn.close()
-
 
 # Define the DAG
 with DAG(
@@ -148,12 +131,5 @@ with DAG(
         provide_context=True,  # Enable the use of kwargs for XCom and other context variables
     )
 
-    # Task to process and store issues in PostgreSQL
-    process_and_store_issues_task = PythonOperator(
-        task_id='process_and_store_issues',
-        python_callable=process_and_store_issues,
-        provide_context=True,  # Enable the use of kwargs for XCom and other context variables
-    )
-
     # Set task dependencies
-    pull_scf_data_task >> process_and_store_issues_task
+    pull_scf_data_task
