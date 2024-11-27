@@ -21,19 +21,20 @@ def pull_scf_data(**kwargs):
     first_run = kwargs['dag_run'].run_id == 'manual__first_run'
 
     # Initialize the session and pagination parameters
-    page = 1
-    per_page = 10
     all_issues = []
 
+    params = {
+        # 'after': '2024-01-01T00:00:00Z',
+        'page': 1,
+        'per_page': 10,
+        'details': True,
+        'sort_direction': ASC,
+        'sort': 'updated_at'
+        'place_url': 'tacoma'
+    }
+
     # If it's the first run, don't add the updated_at_after parameter
-    if first_run:
-        params = {
-            'page': page,
-            'per_page': per_page,
-            'details': True,
-            'place_url': 'scranton'
-        }
-    else:
+    if not first_run:
         # Get the max updated_at timestamp from the table
         pg_hook = PostgresHook(postgres_conn_id='postgres_default')
         conn = pg_hook.get_conn()
@@ -50,13 +51,7 @@ def pull_scf_data(**kwargs):
         if isinstance(max_updated_at, datetime):
             max_updated_at = max_updated_at.strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
 
-        params = {
-            'updated_at_after': max_updated_at,
-            'page': page,
-            'per_page': per_page,
-            'details': True,
-            'place_url': 'scranton'
-        }
+        params['updated_at_after'] = max_updated_at
 
     while True:
         logging.info(f"Fetching data with params: {params}")
