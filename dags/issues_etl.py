@@ -21,15 +21,17 @@ def pull_scf_data(**kwargs):
     first_run = kwargs['dag_run'].run_id == 'manual__first_run'
 
     # Initialize the session and pagination parameters
+    page = 1
+    per_page = 10
     all_issues = []
 
     params = {
         # 'after': '2024-01-01T00:00:00Z',
-        'page': 1,
-        'per_page': 10,
+        'page': page,
+        'per_page': per_page,
+        'sort_direction': 'ASC',
+        'sort': 'updated_at',
         'details': True,
-        'sort_direction': ASC,
-        'sort': 'updated_at'
         'place_url': 'tacoma'
     }
 
