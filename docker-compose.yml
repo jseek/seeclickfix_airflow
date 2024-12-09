@@ -105,6 +105,23 @@ services:
     depends_on:
       - postgres
 
+  jupyter:
+    image: jupyter/base-notebook:latest
+    container_name: jupyter
+    ports:
+      - "6676:8888"  # Jupyter runs on port 8888 by default
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+      JUPYTER_PASSWORD: "destiny"
+    networks:
+      - airflow_network
+    volumes:
+      - ./notebooks:/home/jovyan/work
+    depends_on:
+      - postgres
+    command: start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
+
+
 networks:
   airflow_network:
     driver: bridge

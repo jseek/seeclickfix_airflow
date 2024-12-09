@@ -25,8 +25,8 @@ def pull_scf_data(**kwargs):
     per_page = 10
 
     params = {
-        'page': page,
-        'per_page': per_page,
+        'page': 1,
+        'per_page': 10,
         'sort_direction': 'ASC',
         'sort': 'updated_at',
         'details': True,
